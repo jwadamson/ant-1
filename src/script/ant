@@ -21,6 +21,12 @@ no_config=false
 use_jikes_default=false
 ant_exec_debug=false
 show_help=false
+
+use_sed=false
+use_awk=true
+
+[ -n "$BASH_VERSION" ] && use_sed=false
+
 for arg in "$@" ; do
   if [ "$arg" = "--noconfig" ] ; then
     no_config=true
@@ -35,12 +41,41 @@ for arg in "$@" ; do
     if [  my"$arg" = my"-h"  -o  my"$arg" = my"-help" ] ; then
       show_help=true
     fi
-    # escape $, ", and \ characters by inserting a \ 
-    esc_arg=`echo "$arg" | sed -e 's@[$"\\]@\\\\\\\\\0@g' `
-    # escape ` by inserting a \ 
-    esc_arg=`echo "$esc_arg" | sed -e 's@\`@\\\\\`@g'`
-    # wrap escaped arg as a quoted argument
+
+    # wrap all arguments as "" strings, escape any internal back-slash, double-quote, $, or back-tick characters
+    #  use printf to void echo behaviors such as escape and line continuation
+    esc_arg="${arg}"
+    if $use_sed
+    then
+      # this is more cross platform compatible for escaping individual arguments
+      #  need a traling newline on input to sed for non-gnu sed versions
+      #  mac sed does not support group-0, using group-1
+      #  seems to drop trailing newlines
+      esc_arg="$(printf '%s\n' "$esc_arg" | sed -z -e 's@\([$"\\`]\)@\\\1@g')"
+    elif $use_awk
+    then
+      # use awk instead of sed or bash, possibly more portable
+      #  seems to drop trailing newlines
+      esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/\\/, "\\\\"); print }' )"
+      esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/\$/, "\\$");  print }' )"
+      esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/\"/, "\\\""); print }' )"
+      esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/`/,  "\\`");  print }' )"
+    else
+      # does not work in dash and possibly other shells
+      # however does not depend upon `sed` or `echo` quirks
+      esc_arg="${esc_arg//\\/\\\\}" # must be first since later patterns introduce backslash chars
+      esc_arg="${esc_arg//\$/\\\$}"
+      esc_arg="${esc_arg//\"/\\\"}"
+      esc_arg="${esc_arg//\`/\\\`}"
+    fi
     quoted_arg="\"$esc_arg\""
+
+    if $ant_exec_debug
+    then
+        # using /bin/echo to avoid line continuation and escape interpretation
+        /bin/echo "arg       : $arg"
+        /bin/echo "quoted_arg: $quoted_arg"
+    fi
     ant_exec_args="$ant_exec_args $quoted_arg"
   fi
 done
@@ -337,7 +372,7 @@ else
 fi
 ant_exec_command="exec \"\$JAVACMD\" $ANT_OPTS -classpath \"\$LOCALCLASSPATH\" -Dant.home=\"\$ANT_HOME\" -Dant.library.dir=\"\$ANT_LIB\" $ant_sys_opts org.apache.tools.ant.launch.Launcher $ANT_ARGS -cp \"\$CLASSPATH\""
 if $ant_exec_debug ; then
-    echo $ant_exec_command $ant_exec_args
+    echo "$ant_exec_command $ant_exec_args"
 fi
 
-eval $ant_exec_command $ant_exec_args
+eval "$ant_exec_command $ant_exec_args"
