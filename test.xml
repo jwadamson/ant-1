@@ -1,0 +1,10 @@
+<project default="run">
+    <target name="run">
+        <echo message="hello world"/>
+        <echo message="foo=${foo}_"/>
+        <echo message="bar=${bar}_"/>
+        <echo message="newline=${newline}_"/>
+        <echo message="doublespace=${doublespace}_"/>
+        <echo message="end"/>
+    </target>
+</project>

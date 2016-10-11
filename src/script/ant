@@ -22,10 +22,24 @@ use_jikes_default=false
 ant_exec_debug=false
 show_help=false
 
+use_bash=false
 use_sed=false
 use_awk=true
 
-[ -n "$BASH_VERSION" ] && use_sed=false
+ksh_ver="0"
+if [ -n "$KSH_VERSION" ]
+then
+  ksh_ver="$(echo "$KSH_VERSION" | grep -m 1 -o '[0-9]\+' | head -n 1)"
+fi
+
+if [ -n "$BASH_VERSION" -o "$ksh_ver" -gt 88 -o -n "$ZSH_NAME" ]
+then
+  # bash, ksh>88, zsh support desired parameter expansion
+  use_bash=true
+else
+  # all other shells use fallback processing
+  use_awk=true
+fi
 
 for arg in "$@" ; do
   if [ "$arg" = "--noconfig" ] ; then
@@ -45,36 +59,36 @@ for arg in "$@" ; do
     # wrap all arguments as "" strings, escape any internal back-slash, double-quote, $, or back-tick characters
     #  use printf to void echo behaviors such as escape and line continuation
     esc_arg="${arg}"
-    if $use_sed
+    if $use_bash
     then
-      # this is more cross platform compatible for escaping individual arguments
-      #  need a traling newline on input to sed for non-gnu sed versions
-      #  mac sed does not support group-0, using group-1
-      #  seems to drop trailing newlines
-      esc_arg="$(printf '%s\n' "$esc_arg" | sed -z -e 's@\([$"\\`]\)@\\\1@g')"
-    elif $use_awk
-    then
-      # use awk instead of sed or bash, possibly more portable
-      #  seems to drop trailing newlines
-      esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/\\/, "\\\\"); print }' )"
-      esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/\$/, "\\$");  print }' )"
-      esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/\"/, "\\\""); print }' )"
-      esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/`/,  "\\`");  print }' )"
-    else
       # does not work in dash and possibly other shells
       # however does not depend upon `sed` or `echo` quirks
       esc_arg="${esc_arg//\\/\\\\}" # must be first since later patterns introduce backslash chars
       esc_arg="${esc_arg//\$/\\\$}"
       esc_arg="${esc_arg//\"/\\\"}"
       esc_arg="${esc_arg//\`/\\\`}"
+    elif $use_sed
+    then
+      # this is more cross platform compatible for escaping individual arguments
+      #  need a traling newline on input to sed for non-gnu sed versions
+      #  mac sed does not support group-0, so pattern uses group-1
+      #  seems to drop trailing newlines
+      esc_arg="$(printf '%s\n' "$esc_arg" | sed -z -e 's@\([$"\\`]\)@\\\1@g')"
+    else
+      # use awk instead of sed or bash, possibly more portable
+      #  seems to drop trailing newlines
+      esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/\\/, "\\\\"); print }' )"
+      esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/\$/, "\\$");  print }' )"
+      esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/\"/, "\\\""); print }' )"
+      esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/`/,  "\\`");  print }' )"
     fi
     quoted_arg="\"$esc_arg\""
 
     if $ant_exec_debug
     then
-        # using /bin/echo to avoid line continuation and escape interpretation
-        /bin/echo "arg       : $arg"
-        /bin/echo "quoted_arg: $quoted_arg"
+        # using printf to avoid echo line continuation and escape interpretation
+        printf "arg       : %s\n" "$arg"
+        printf "quoted_arg: %s\n" "$quoted_arg"
     fi
     ant_exec_args="$ant_exec_args $quoted_arg"
   fi
