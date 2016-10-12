@@ -22,24 +22,7 @@ use_jikes_default=false
 ant_exec_debug=false
 show_help=false
 
-use_bash=false
-use_sed=false
-use_awk=true
-
-ksh_ver="0"
-if [ -n "$KSH_VERSION" ]
-then
-  ksh_ver="$(echo "$KSH_VERSION" | grep -m 1 -o '[0-9]\+' | head -n 1)"
-fi
-
-if [ -n "$BASH_VERSION" -o "$ksh_ver" -gt 88 -o -n "$ZSH_NAME" ]
-then
-  # bash, ksh>88, zsh support desired parameter expansion
-  use_bash=true
-else
-  # all other shells use fallback processing
-  use_awk=true
-fi
+esc_tool=sed
 
 for arg in "$@" ; do
   if [ "$arg" = "--noconfig" ] ; then
@@ -57,31 +40,28 @@ for arg in "$@" ; do
     fi
 
     # wrap all arguments as "" strings, escape any internal back-slash, double-quote, $, or back-tick characters
-    #  use printf to void echo behaviors such as escape and line continuation
-    esc_arg="${arg}"
-    if $use_bash
-    then
-      # does not work in dash and possibly other shells
-      # however does not depend upon `sed` or `echo` quirks
-      esc_arg="${esc_arg//\\/\\\\}" # must be first since later patterns introduce backslash chars
-      esc_arg="${esc_arg//\$/\\\$}"
-      esc_arg="${esc_arg//\"/\\\"}"
-      esc_arg="${esc_arg//\`/\\\`}"
-    elif $use_sed
-    then
-      # this is more cross platform compatible for escaping individual arguments
-      #  need a traling newline on input to sed for non-gnu sed versions
-      #  mac sed does not support group-0, so pattern uses group-1
-      #  seems to drop trailing newlines
-      esc_arg="$(printf '%s\n' "$esc_arg" | sed -z -e 's@\([$"\\`]\)@\\\1@g')"
-    else
-      # use awk instead of sed or bash, possibly more portable
-      #  seems to drop trailing newlines
-      esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/\\/, "\\\\"); print }' )"
-      esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/\$/, "\\$");  print }' )"
-      esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/\"/, "\\\""); print }' )"
-      esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/`/,  "\\`");  print }' )"
-    fi
+    #  use printf to avoid echo modification behaviors such as escape and line continuation
+    #  pad the value with leading/trailing X to protect trailing newlines and whitespace from awk and sed
+    esc_arg="X${arg}X"
+    case "$esc_tool" in
+      'sed')
+        #  mac sed does not support group-0, so pattern uses group-1
+        esc_arg="$(printf '%s' "$esc_arg" | sed -e 's@\([$"\\`]\)@\\\1@g')"
+        ;;
+      'awk')
+        esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/\\/, "\\\\"); print }' )"
+        esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/\$/, "\\$");  print }' )"
+        esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/\"/, "\\\""); print }' )"
+        esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/`/,  "\\`");  print }' )"
+        ;;
+      '*')
+        echo "could not determine escaping tool"
+        exit 1
+        ;;
+    esac
+    # remove the padding Xs added above
+    esc_arg="${esc_arg#X}"
+    esc_arg="${esc_arg%X}"
     quoted_arg="\"$esc_arg\""
 
     if $ant_exec_debug
