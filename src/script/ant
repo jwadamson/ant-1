@@ -54,6 +54,17 @@ for arg in "$@" ; do
         esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/\"/, "\\\""); print }' )"
         esc_arg="$(printf '%s' "$esc_arg" | awk '{ gsub(/`/,  "\\`");  print }' )"
         ;;
+#      'bash')
+#        # does not depend upon `sed` or `echo` quirks
+#        # tested with bash `[ -n "${BASH_VERSION}" ]`
+#        # tested with zsh `[ -n "${ZSH_NAME}" ]`
+#        # tested with ksh93+ `ksh_ver="$(echo "$KSH_VERSION" | grep -m 1 -o '[0-9]\+' | head -n 1)"; [ "$ksh_ver" -gt 88 ]`
+#        # fails in ksh88, dash
+#        esc_arg="${esc_arg//\\/\\\\}" # must be first since later patterns introduce backslash chars
+#        esc_arg="${esc_arg//\$/\\\$}"
+#        esc_arg="${esc_arg//\"/\\\"}"
+#        esc_arg="${esc_arg//\`/\\\`}"
+#        ;;
       '*')
         echo "could not determine escaping tool"
         exit 1
